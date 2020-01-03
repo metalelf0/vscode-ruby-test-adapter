@@ -43,3 +43,34 @@ module VSCode
     end
   end
 end
+
+module MinitestRunnableWithCustomRunMethod
+  def run reporter, options = {}
+    filter = options[:filter] || "/./"
+    filter = Regexp.new $1 if filter.is_a?(String) && filter =~ %r%/(.*)/%
+
+    filtered_methods = self.runnable_methods.find_all { |m|
+      filter === m || filter === "#{self}##{m}"
+    }
+
+    exclude = options[:exclude]
+    exclude = Regexp.new $1 if exclude =~ %r%/(.*)/%
+
+    filtered_methods.delete_if { |m|
+      exclude === m || exclude === "#{self}##{m}"
+    }
+
+    return if filtered_methods.empty?
+
+    with_info_handler reporter do
+      filtered_methods.each do |method_name|
+        # @metalelf0 change: see https://github.com/connorshea/vscode-ruby-test-adapter/issues/20
+        reporter.record Minitest.run_one_method(self, method_name)
+        # run_one_method self, method_name, reporter
+        # end @metalelf0 change
+      end
+    end
+  end
+end
+
+::Minitest::Runnable.singleton_class.send(:prepend, MinitestRunnableWithCustomRunMethod)
